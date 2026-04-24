@@ -91,6 +91,41 @@ const Index = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!settings?.shake_to_alert || isAlertActive || countdownRemaining !== null) {
+      return;
+    }
+
+    let lastTriggerAt = 0;
+    const threshold = 24;
+
+    const handleMotion = (event: DeviceMotionEvent) => {
+      const acceleration = event.accelerationIncludingGravity;
+      if (!acceleration) {
+        return;
+      }
+
+      const maxAxis = Math.max(
+        Math.abs(acceleration.x ?? 0),
+        Math.abs(acceleration.y ?? 0),
+        Math.abs(acceleration.z ?? 0)
+      );
+
+      if (maxAxis < threshold || Date.now() - lastTriggerAt < 10000) {
+        return;
+      }
+
+      lastTriggerAt = Date.now();
+      toast.warning("Shake detected", {
+        description: "Opening SOS options now.",
+      });
+      setCountdownOpen(true);
+    };
+
+    window.addEventListener("devicemotion", handleMotion);
+    return () => window.removeEventListener("devicemotion", handleMotion);
+  }, [countdownRemaining, isAlertActive, settings?.shake_to_alert]);
+
   const launchAlert = async (countdownSeconds: number) => {
     try {
       const currentPosition = await new Promise<GeolocationPosition | null>((resolve) => {
@@ -159,7 +194,6 @@ const Index = () => {
       });
     } catch (err) {
       setIsAlertActive(false);
-      console.error("Alert creation failed:", err);
       toast.error("Unable to start the alert right now");
     }
   };
@@ -312,9 +346,31 @@ const Index = () => {
                     </div>
                     <div>
                       <p className="font-medium text-foreground">Tracking</p>
-                      <p className="text-xs text-muted-foreground">{isTracking ? "Location syncing" : "Inactive"}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {isTracking
+                          ? `Location syncing${activeAlert?.last_location_at ? ` • updated ${new Date(activeAlert.last_location_at).toLocaleTimeString()}` : ""}`
+                          : "Inactive"}
+                      </p>
                     </div>
                   </div>
+                  {activeAlert && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        if (isTracking) {
+                          stopTracking();
+                          toast.info("Live tracking paused");
+                          return;
+                        }
+
+                        startTracking(activeAlert.id);
+                        toast.success("Live tracking resumed");
+                      }}
+                    >
+                      {isTracking ? "Pause" : "Resume"}
+                    </Button>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-between rounded-2xl bg-muted/50 p-3">

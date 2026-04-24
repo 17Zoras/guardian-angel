@@ -12,6 +12,8 @@ import {
   Check,
   ShieldCheck,
   UserRound,
+  Smartphone,
+  Volume2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -75,6 +77,7 @@ const Profile = () => {
 
   const handleSave = async () => {
     const nextEmail = editForm.email.trim();
+    const nextPhone = editForm.phone.trim();
 
     if (nextEmail && nextEmail !== user?.email) {
       const { error } = await updateAccount({ email: nextEmail });
@@ -86,19 +89,24 @@ const Profile = () => {
       toast.success("Account email update requested. Check your inbox if confirmation is required.");
     }
 
-    updateProfile.mutate(
-      {
+    try {
+      const savedProfile = await updateProfile.mutateAsync({
         full_name: editForm.full_name.trim(),
         email: nextEmail,
-        phone: editForm.phone.trim(),
+        phone: nextPhone || null,
         avatar_url: editForm.avatar_url.trim(),
-      },
-      {
-        onSuccess: () => {
-          setIsEditing(false);
-        },
-      }
-    );
+      });
+
+      setEditForm({
+        full_name: savedProfile.full_name ?? "",
+        email: savedProfile.email ?? "",
+        phone: savedProfile.phone ?? "",
+        avatar_url: savedProfile.avatar_url ?? "",
+      });
+      setIsEditing(false);
+    } catch {
+      // Toast is handled in the hook.
+    }
   };
 
   const handleMedicalSave = () => {
@@ -153,6 +161,34 @@ const Profile = () => {
     setLanguageDialogOpen(false);
   };
 
+  const handleRingtoneChange = async (checked: boolean) => {
+    try {
+      await updateSettings.mutateAsync({ ringtone_enabled: checked });
+      toast.success(checked ? "Ringtone enabled" : "Ringtone disabled");
+    } catch {
+      // Toast is handled in the hook.
+    }
+  };
+
+  const handleVibrationChange = async (checked: boolean) => {
+    try {
+      await updateSettings.mutateAsync({ vibration_enabled: checked });
+      toast.success(checked ? "Vibration enabled" : "Vibration disabled");
+    } catch {
+      // Toast is handled in the hook.
+    }
+  };
+
+  const handlePrivacyModeChange = async (mode: "standard" | "enhanced") => {
+    try {
+      await updateSettings.mutateAsync({ privacy_mode: mode });
+      toast.success(mode === "enhanced" ? "Enhanced privacy enabled" : "Standard privacy enabled");
+      setPrivacyDialogOpen(false);
+    } catch {
+      // Toast is handled in the hook.
+    }
+  };
+
   const handleLogout = async () => {
     setLogoutDialogOpen(false);
     await signOut();
@@ -175,6 +211,14 @@ const Profile = () => {
     toast.success("Password updated");
   };
 
+  const languageOptions = [
+    { code: "en", name: "English (US)" },
+    { code: "es", name: "Spanish" },
+    { code: "fr", name: "French" },
+    { code: "de", name: "Deutsch" },
+    { code: "hi", name: "Hindi" },
+  ];
+
   const languages = [
     { code: "en", name: "English (US)" },
     { code: "es", name: "Español" },
@@ -182,6 +226,8 @@ const Profile = () => {
     { code: "de", name: "Deutsch" },
     { code: "hi", name: "Hindi" },
   ];
+
+  void languages;
 
   const helpTopics = [
     { title: "How to use SOS", description: "Tap the SOS button to start an alert, save the event, and begin live tracking." },
@@ -297,7 +343,7 @@ const Profile = () => {
               </div>
               <div className="space-y-2">
                 <Label>Phone</Label>
-                <Input value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
+                <Input type="tel" value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
               </div>
               <div className="space-y-2">
                 <Label>Avatar URL</Label>
@@ -435,6 +481,32 @@ const Profile = () => {
               <Switch checked={theme === "dark"} onCheckedChange={handleDarkModeChange} />
             </div>
             <Separator />
+            <div className="flex items-center justify-between py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                  <Volume2 className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Ringtone</p>
+                  <p className="text-xs text-muted-foreground">Use sound for fake calls and audible tools</p>
+                </div>
+              </div>
+              <Switch checked={settings?.ringtone_enabled ?? true} onCheckedChange={handleRingtoneChange} />
+            </div>
+            <Separator />
+            <div className="flex items-center justify-between py-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                  <Smartphone className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Vibration</p>
+                  <p className="text-xs text-muted-foreground">Use device vibration during urgent alerts</p>
+                </div>
+              </div>
+              <Switch checked={settings?.vibration_enabled ?? true} onCheckedChange={handleVibrationChange} />
+            </div>
+            <Separator />
             <button className="flex w-full items-center justify-between rounded-lg py-3 transition-colors hover:bg-muted/30" onClick={() => setLanguageDialogOpen(true)}>
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
@@ -442,7 +514,7 @@ const Profile = () => {
                 </div>
                 <div className="text-left">
                   <p className="font-medium text-foreground">Language</p>
-                  <p className="text-xs text-muted-foreground">{languages.find((language) => language.code === (settings?.language ?? "en"))?.name}</p>
+                  <p className="text-xs text-muted-foreground">{languageOptions.find((language) => language.code === (settings?.language ?? "en"))?.name}</p>
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 text-muted-foreground" />
@@ -455,7 +527,7 @@ const Profile = () => {
                 </div>
                 <div className="text-left">
                   <p className="font-medium text-foreground">Privacy</p>
-                  <p className="text-xs text-muted-foreground">Manage your data</p>
+                  <p className="text-xs capitalize text-muted-foreground">{settings?.privacy_mode ?? "standard"} protection</p>
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 text-muted-foreground" />
@@ -533,7 +605,7 @@ const Profile = () => {
             <DialogTitle>Select Language</DialogTitle>
           </DialogHeader>
           <div className="space-y-2 pt-2">
-            {languages.map((language) => (
+            {languageOptions.map((language) => (
               <button
                 key={language.code}
                 onClick={() => handleLanguageChange(language.code)}
@@ -556,6 +628,36 @@ const Profile = () => {
             <DialogDescription>Control how your data is used</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Privacy Mode</Label>
+              <div className="grid gap-2">
+                {[
+                  {
+                    value: "standard" as const,
+                    title: "Standard",
+                    description: "Share location during active alerts and manual location sharing.",
+                  },
+                  {
+                    value: "enhanced" as const,
+                    title: "Enhanced",
+                    description: "Reduce non-essential prompts and keep sharing more deliberate.",
+                  },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => handlePrivacyModeChange(option.value)}
+                    className={`rounded-xl border p-3 text-left transition-colors ${
+                      (settings?.privacy_mode ?? "standard") === option.value
+                        ? "border-primary bg-primary/10"
+                        : "border-border hover:bg-muted/50"
+                    }`}
+                  >
+                    <p className="font-medium text-foreground">{option.title}</p>
+                    <p className="text-sm text-muted-foreground">{option.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="rounded-xl bg-muted/50 p-3">
               <p className="font-medium text-foreground">Location Data</p>
               <p className="text-sm text-muted-foreground">Your location is only shared during active SOS alerts or manual sharing.</p>

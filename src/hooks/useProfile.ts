@@ -9,11 +9,11 @@ export interface Profile {
   user_id: string;
   full_name: string;
   email: string;
-  phone: string;
-  avatar_url: string;
-  blood_type: string;
-  allergies: string;
-  medical_conditions: string;
+  phone: string | null;
+  avatar_url: string | null;
+  blood_type: string | null;
+  allergies: string | null;
+  medical_conditions: string | null;
 }
 
 export const useProfile = () => {
@@ -54,11 +54,12 @@ export const useProfile = () => {
 
   const updateProfile = useMutation({
     mutationFn: async (updates: Partial<Profile>) => {
+      const normalizedPhone = updates.phone === undefined ? query.data?.phone ?? null : updates.phone?.trim() || null;
       const normalizedUpdates = {
         user_id: user!.id,
         full_name: updates.full_name ?? query.data?.full_name ?? "",
         email: updates.email ?? query.data?.email ?? user?.email ?? "",
-        phone: updates.phone?.trim() || null,
+        phone: normalizedPhone,
         avatar_url: updates.avatar_url?.trim() || null,
         blood_type: updates.blood_type?.trim() || null,
         allergies: updates.allergies?.trim() || null,
@@ -81,7 +82,7 @@ export const useProfile = () => {
         queryClient.setQueryData<Profile>(["profile", user?.id], {
           ...previousProfile,
           ...updates,
-          phone: updates.phone?.trim() || null,
+          phone: updates.phone === undefined ? previousProfile.phone : updates.phone?.trim() || null,
           avatar_url: updates.avatar_url?.trim() || null,
           blood_type: updates.blood_type?.trim() || null,
           allergies: updates.allergies?.trim() || null,

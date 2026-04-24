@@ -10,6 +10,9 @@ export interface UserSettings {
   theme: string;
   language: string;
   notifications_enabled: boolean;
+  ringtone_enabled: boolean;
+  vibration_enabled: boolean;
+  privacy_mode: "standard" | "enhanced";
   shake_to_alert: boolean;
   auto_recording: boolean;
 }
@@ -53,6 +56,9 @@ export const useSettings = () => {
         theme: updates.theme ?? query.data?.theme ?? "light",
         language: updates.language ?? query.data?.language ?? "en",
         notifications_enabled: updates.notifications_enabled ?? query.data?.notifications_enabled ?? true,
+        ringtone_enabled: updates.ringtone_enabled ?? query.data?.ringtone_enabled ?? true,
+        vibration_enabled: updates.vibration_enabled ?? query.data?.vibration_enabled ?? true,
+        privacy_mode: updates.privacy_mode ?? query.data?.privacy_mode ?? "standard",
         shake_to_alert: updates.shake_to_alert ?? query.data?.shake_to_alert ?? true,
         auto_recording: updates.auto_recording ?? query.data?.auto_recording ?? false,
       };

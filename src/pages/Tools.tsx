@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import {
   Bell,
   BookOpen,
@@ -57,7 +58,9 @@ const Tools = () => {
   const [fakeCallOpen, setFakeCallOpen] = useState(false);
   const [fakeCallActive, setFakeCallActive] = useState(false);
   const [callerName, setCallerName] = useState("Mom");
-  const [callDelay, setCallDelay] = useState(5);
+  const [callDelay, setCallDelay] = useState(10);
+  const [scheduledFakeCallAt, setScheduledFakeCallAt] = useState<number | null>(null);
+  const [scheduledFakeCallRemaining, setScheduledFakeCallRemaining] = useState(0);
   const [resourceOpen, setResourceOpen] = useState<string | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteTitle, setNoteTitle] = useState("");
@@ -69,9 +72,25 @@ const Tools = () => {
   const gainNodeRef = useRef<GainNode | null>(null);
   const fakeCallTimeoutRef = useRef<number | null>(null);
   const ringtoneAudioRef = useRef<HTMLAudioElement | null>(null);
+  const fakeCallActiveRef = useRef(false);
+  const scheduledFakeCallAtRef = useRef<number | null>(null);
+  const fakeCallSessionRef = useRef(0);
+  const callerNameRef = useRef(callerName);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  useEffect(() => {
+    callerNameRef.current = callerName;
+  }, [callerName]);
+
+  useEffect(() => {
+    fakeCallActiveRef.current = fakeCallActive;
+  }, [fakeCallActive]);
+
+  useEffect(() => {
+    scheduledFakeCallAtRef.current = scheduledFakeCallAt;
+  }, [scheduledFakeCallAt]);
 
   useEffect(() => {
     if (!activeCheckin) {
@@ -88,6 +107,22 @@ const Tools = () => {
     const interval = window.setInterval(tick, 1000);
     return () => window.clearInterval(interval);
   }, [activeCheckin]);
+
+  useEffect(() => {
+    if (!scheduledFakeCallAt) {
+      setScheduledFakeCallRemaining(0);
+      return;
+    }
+
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((scheduledFakeCallAt - Date.now()) / 1000));
+      setScheduledFakeCallRemaining(remaining);
+    };
+
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    return () => window.clearInterval(interval);
+  }, [scheduledFakeCallAt]);
 
   useEffect(() => {
     if (!activeCheckin || timeRemaining !== 0) {
@@ -162,14 +197,101 @@ const Tools = () => {
     };
   }, []);
 
-  const handleFakeCall = () => {
+  const stopRingtone = () => {
+    if (ringtoneAudioRef.current) {
+      ringtoneAudioRef.current.pause();
+      ringtoneAudioRef.current.currentTime = 0;
+    }
+  };
+
+  const resetFakeCall = (reason?: "stopped" | "declined" | "answered") => {
+    fakeCallSessionRef.current += 1;
+
+    if (fakeCallTimeoutRef.current) {
+      window.clearTimeout(fakeCallTimeoutRef.current);
+      fakeCallTimeoutRef.current = null;
+    }
+
+    stopRingtone();
+
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(0);
+    }
+
+    const wasScheduled = scheduledFakeCallAtRef.current !== null;
+    const wasActive = fakeCallActiveRef.current;
+    const currentCallerName = callerNameRef.current || "Your contact";
+
+    scheduledFakeCallAtRef.current = null;
+    fakeCallActiveRef.current = false;
+    setScheduledFakeCallAt(null);
+    setScheduledFakeCallRemaining(0);
+    setFakeCallActive(false);
     setFakeCallOpen(false);
+
+    if (reason === "answered") {
+      addNotification.mutate({
+        type: "success",
+        title: "Fake call answered",
+        message: `${currentCallerName} helped you exit the moment cleanly.`,
+      });
+      toast.success("Call connected");
+      return;
+    }
+
+    if (reason === "declined") {
+      addNotification.mutate({
+        type: "info",
+        title: "Fake call declined",
+        message: `The incoming call from ${currentCallerName} was dismissed.`,
+      });
+      toast.info("Fake call declined");
+      return;
+    }
+
+    if (wasScheduled || wasActive) {
+      addNotification.mutate({
+        type: "info",
+        title: "Fake call stopped",
+        message: `The fake call from ${currentCallerName} was stopped before it continued.`,
+      });
+      toast.info("Fake call stopped");
+    }
+  };
+
+  const handleFakeCall = () => {
+    resetFakeCall();
+    const sessionId = fakeCallSessionRef.current;
+
+    setFakeCallOpen(false);
+    const scheduledAt = Date.now() + callDelay * 1000;
+    scheduledFakeCallAtRef.current = scheduledAt;
+    setScheduledFakeCallAt(scheduledAt);
+
     toast.info(`Incoming call scheduled in ${callDelay} seconds`);
+    addNotification.mutate({
+      type: "info",
+      title: "Fake call scheduled",
+      message: `${callerNameRef.current || "Your contact"} will call in ${callDelay} seconds.`,
+    });
+
     fakeCallTimeoutRef.current = window.setTimeout(async () => {
+      if (sessionId !== fakeCallSessionRef.current) {
+        return;
+      }
+
+      fakeCallTimeoutRef.current = null;
+      fakeCallActiveRef.current = true;
+      scheduledFakeCallAtRef.current = null;
       setFakeCallActive(true);
+      setScheduledFakeCallAt(null);
 
       try {
-        if (ringtoneAudioRef.current) {
+        if (settings?.ringtone_enabled === false) {
+          toast.info("Fake call is live", {
+            description: "Ringtone is turned off in your settings.",
+          });
+        } else if (ringtoneAudioRef.current) {
           ringtoneAudioRef.current.currentTime = 0;
           await ringtoneAudioRef.current.play();
         }
@@ -178,14 +300,39 @@ const Tools = () => {
           description: "Tap the call screen if your browser blocks ringtone autoplay.",
         });
       }
+
+      if ((settings?.vibration_enabled ?? true) && typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate([250, 150, 250, 150, 400]);
+      }
     }, callDelay * 1000);
   };
 
-  const stopRingtone = () => {
-    if (ringtoneAudioRef.current) {
-      ringtoneAudioRef.current.pause();
-      ringtoneAudioRef.current.currentTime = 0;
+  const stopFakeCall = (reason?: "stopped" | "declined" | "answered") => {
+    if (!fakeCallActiveRef.current && scheduledFakeCallAtRef.current === null && fakeCallTimeoutRef.current === null) {
+      return;
     }
+
+    resetFakeCall(reason);
+  };
+
+  const handleIncomingCallSurfaceClick = async () => {
+    if (!fakeCallActiveRef.current || settings?.ringtone_enabled === false) {
+      return;
+    }
+
+    try {
+      await ringtoneAudioRef.current?.play();
+    } catch {
+      toast.error("Ringtone playback is blocked on this device");
+    }
+  };
+
+  const handleFakeCallButtonClick = (
+    event: MouseEvent<HTMLButtonElement>,
+    reason: "stopped" | "declined" | "answered"
+  ) => {
+    event.stopPropagation();
+    stopFakeCall(reason);
   };
 
   const handleFlashlight = () => {
@@ -253,6 +400,11 @@ const Tools = () => {
 
         await navigator.clipboard.writeText(url);
         toast.success("Location link copied");
+        addNotification.mutate({
+          type: "success",
+          title: "Location shared",
+          message: "Your current location link is ready to send.",
+        });
       },
       () => toast.error("Unable to get location")
     );
@@ -437,6 +589,22 @@ const Tools = () => {
         {(checkinError || evidenceError) && (
           <Card className="gradient-card border-0 shadow-card">
             <CardContent className="p-4 text-sm text-muted-foreground">{checkinError || evidenceError}</CardContent>
+          </Card>
+        )}
+
+        {scheduledFakeCallAt && !fakeCallActive && (
+          <Card className="gradient-card border-0 border-l-4 border-l-primary shadow-card">
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold text-foreground">Fake call scheduled</p>
+                <p className="text-sm text-muted-foreground">
+                  {callerName || "Your contact"} will call in {scheduledFakeCallRemaining} second{scheduledFakeCallRemaining === 1 ? "" : "s"}.
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => stopFakeCall("stopped")}>
+                Stop Fake Call
+              </Button>
+            </CardContent>
           </Card>
         )}
 
@@ -743,11 +911,11 @@ const Tools = () => {
               <Input value={callerName} onChange={(event) => setCallerName(event.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Call in (seconds)</Label>
+              <Label>Call delay</Label>
               <div className="flex gap-2">
-                {[5, 10, 30, 60].map((seconds) => (
+                {[10, 30, 60].map((seconds) => (
                   <Button key={seconds} variant={callDelay === seconds ? "default" : "outline"} size="sm" onClick={() => setCallDelay(seconds)}>
-                    {seconds}s
+                    {seconds === 60 ? "1 min" : `${seconds}s`}
                   </Button>
                 ))}
               </div>
@@ -786,24 +954,21 @@ const Tools = () => {
       {fakeCallActive && (
         <div
           className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background p-8"
-          onClick={async () => {
-            try {
-              await ringtoneAudioRef.current?.play();
-            } catch {
-              toast.error("Ringtone playback is blocked on this device");
-            }
-          }}
+          onClick={handleIncomingCallSurfaceClick}
         >
           <div className="mb-6 flex h-24 w-24 animate-pulse items-center justify-center rounded-full bg-primary/10">
             <Phone className="h-12 w-12 text-primary" />
           </div>
           <h2 className="mb-2 text-2xl font-bold text-foreground">{callerName}</h2>
           <p className="mb-12 text-muted-foreground">Incoming Call...</p>
-          <div className="flex gap-8">
-            <Button onClick={() => { stopRingtone(); setFakeCallActive(false); }} size="lg" className="h-16 w-16 rounded-full bg-destructive hover:bg-destructive/90">
+          <div className="flex flex-wrap items-center justify-center gap-5">
+            <Button onClick={(event) => handleFakeCallButtonClick(event, "declined")} size="lg" className="h-16 w-16 rounded-full bg-destructive hover:bg-destructive/90">
               <X className="h-8 w-8" />
             </Button>
-            <Button onClick={() => { stopRingtone(); setFakeCallActive(false); toast.success("Call connected"); }} size="lg" className="h-16 w-16 rounded-full bg-safe hover:bg-safe/90">
+            <Button variant="outline" onClick={(event) => handleFakeCallButtonClick(event, "stopped")} className="rounded-full px-6">
+              Stop
+            </Button>
+            <Button onClick={(event) => handleFakeCallButtonClick(event, "answered")} size="lg" className="h-16 w-16 rounded-full bg-safe hover:bg-safe/90">
               <Phone className="h-8 w-8" />
             </Button>
           </div>

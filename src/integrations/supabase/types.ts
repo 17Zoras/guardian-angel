@@ -289,10 +289,13 @@ export type Database = {
           id: string
           language: string
           notifications_enabled: boolean
+          privacy_mode: string
+          ringtone_enabled: boolean
           shake_to_alert: boolean
           theme: string
           updated_at: string
           user_id: string
+          vibration_enabled: boolean
         }
         Insert: {
           auto_recording?: boolean
@@ -300,10 +303,13 @@ export type Database = {
           id?: string
           language?: string
           notifications_enabled?: boolean
+          privacy_mode?: string
+          ringtone_enabled?: boolean
           shake_to_alert?: boolean
           theme?: string
           updated_at?: string
           user_id: string
+          vibration_enabled?: boolean
         }
         Update: {
           auto_recording?: boolean
@@ -311,10 +317,13 @@ export type Database = {
           id?: string
           language?: string
           notifications_enabled?: boolean
+          privacy_mode?: string
+          ringtone_enabled?: boolean
           shake_to_alert?: boolean
           theme?: string
           updated_at?: string
           user_id?: string
+          vibration_enabled?: boolean
         }
         Relationships: []
       }
