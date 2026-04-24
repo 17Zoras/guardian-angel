@@ -54,17 +54,54 @@ export const useProfile = () => {
 
   const updateProfile = useMutation({
     mutationFn: async (updates: Partial<Profile>) => {
-      const { error } = await supabase
+      const normalizedUpdates = {
+        user_id: user!.id,
+        full_name: updates.full_name ?? query.data?.full_name ?? "",
+        email: updates.email ?? query.data?.email ?? user?.email ?? "",
+        phone: updates.phone?.trim() || null,
+        avatar_url: updates.avatar_url?.trim() || null,
+        blood_type: updates.blood_type?.trim() || null,
+        allergies: updates.allergies?.trim() || null,
+        medical_conditions: updates.medical_conditions?.trim() || null,
+      };
+
+      const { data, error } = await supabase
         .from("profiles")
-        .update(updates)
-        .eq("user_id", user!.id);
+        .upsert(normalizedUpdates, { onConflict: "user_id" })
+        .select()
+        .single();
       if (error) throw error;
+      return data as Profile;
     },
-    onSuccess: () => {
+    onMutate: async (updates) => {
+      await queryClient.cancelQueries({ queryKey: ["profile", user?.id] });
+      const previousProfile = queryClient.getQueryData<Profile>(["profile", user?.id]);
+
+      if (previousProfile) {
+        queryClient.setQueryData<Profile>(["profile", user?.id], {
+          ...previousProfile,
+          ...updates,
+          phone: updates.phone?.trim() || null,
+          avatar_url: updates.avatar_url?.trim() || null,
+          blood_type: updates.blood_type?.trim() || null,
+          allergies: updates.allergies?.trim() || null,
+          medical_conditions: updates.medical_conditions?.trim() || null,
+        } as Profile);
+      }
+
+      return { previousProfile };
+    },
+    onSuccess: (profile) => {
+      queryClient.setQueryData(["profile", user?.id], profile);
       queryClient.invalidateQueries({ queryKey: ["profile"] });
       toast.success("Profile updated!");
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error, _updates, context) => {
+      if (context?.previousProfile) {
+        queryClient.setQueryData(["profile", user?.id], context.previousProfile);
+      }
+      toast.error(err.message);
+    },
   });
 
   return {

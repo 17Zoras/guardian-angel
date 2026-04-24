@@ -8,7 +8,6 @@ import {
   MapPin,
   MessageSquare,
   Mic,
-  PauseCircle,
   Phone,
   Play,
   Save,
@@ -69,6 +68,7 @@ const Tools = () => {
   const oscillatorRef = useRef<OscillatorNode | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const fakeCallTimeoutRef = useRef<number | null>(null);
+  const ringtoneAudioRef = useRef<HTMLAudioElement | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -138,9 +138,17 @@ const Tools = () => {
   }, [activeCheckin, addNotification, contacts.length, createAlert, createEvent, timeRemaining, updateCheckin]);
 
   useEffect(() => {
+    ringtoneAudioRef.current = new Audio("/fake-call-ringtone.wav");
+    ringtoneAudioRef.current.loop = true;
+
     return () => {
       if (fakeCallTimeoutRef.current) {
         window.clearTimeout(fakeCallTimeoutRef.current);
+      }
+
+      if (ringtoneAudioRef.current) {
+        ringtoneAudioRef.current.pause();
+        ringtoneAudioRef.current.currentTime = 0;
       }
 
       recorderRef.current?.stop();
@@ -157,7 +165,27 @@ const Tools = () => {
   const handleFakeCall = () => {
     setFakeCallOpen(false);
     toast.info(`Incoming call scheduled in ${callDelay} seconds`);
-    fakeCallTimeoutRef.current = window.setTimeout(() => setFakeCallActive(true), callDelay * 1000);
+    fakeCallTimeoutRef.current = window.setTimeout(async () => {
+      setFakeCallActive(true);
+
+      try {
+        if (ringtoneAudioRef.current) {
+          ringtoneAudioRef.current.currentTime = 0;
+          await ringtoneAudioRef.current.play();
+        }
+      } catch {
+        toast.info("Incoming call ready", {
+          description: "Tap the call screen if your browser blocks ringtone autoplay.",
+        });
+      }
+    }, callDelay * 1000);
+  };
+
+  const stopRingtone = () => {
+    if (ringtoneAudioRef.current) {
+      ringtoneAudioRef.current.pause();
+      ringtoneAudioRef.current.currentTime = 0;
+    }
   };
 
   const handleFlashlight = () => {
@@ -756,17 +784,26 @@ const Tools = () => {
       </Dialog>
 
       {fakeCallActive && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background p-8">
+        <div
+          className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-background p-8"
+          onClick={async () => {
+            try {
+              await ringtoneAudioRef.current?.play();
+            } catch {
+              toast.error("Ringtone playback is blocked on this device");
+            }
+          }}
+        >
           <div className="mb-6 flex h-24 w-24 animate-pulse items-center justify-center rounded-full bg-primary/10">
             <Phone className="h-12 w-12 text-primary" />
           </div>
           <h2 className="mb-2 text-2xl font-bold text-foreground">{callerName}</h2>
           <p className="mb-12 text-muted-foreground">Incoming Call...</p>
           <div className="flex gap-8">
-            <Button onClick={() => setFakeCallActive(false)} size="lg" className="h-16 w-16 rounded-full bg-destructive hover:bg-destructive/90">
+            <Button onClick={() => { stopRingtone(); setFakeCallActive(false); }} size="lg" className="h-16 w-16 rounded-full bg-destructive hover:bg-destructive/90">
               <X className="h-8 w-8" />
             </Button>
-            <Button onClick={() => { setFakeCallActive(false); toast.success("Call connected"); }} size="lg" className="h-16 w-16 rounded-full bg-safe hover:bg-safe/90">
+            <Button onClick={() => { stopRingtone(); setFakeCallActive(false); toast.success("Call connected"); }} size="lg" className="h-16 w-16 rounded-full bg-safe hover:bg-safe/90">
               <Phone className="h-8 w-8" />
             </Button>
           </div>

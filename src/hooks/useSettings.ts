@@ -48,16 +48,46 @@ export const useSettings = () => {
 
   const updateSettings = useMutation({
     mutationFn: async (updates: Partial<UserSettings>) => {
-      const { error } = await supabase
+      const normalizedUpdates = {
+        user_id: user!.id,
+        theme: updates.theme ?? query.data?.theme ?? "light",
+        language: updates.language ?? query.data?.language ?? "en",
+        notifications_enabled: updates.notifications_enabled ?? query.data?.notifications_enabled ?? true,
+        shake_to_alert: updates.shake_to_alert ?? query.data?.shake_to_alert ?? true,
+        auto_recording: updates.auto_recording ?? query.data?.auto_recording ?? false,
+      };
+
+      const { data, error } = await supabase
         .from("user_settings")
-        .update(updates)
-        .eq("user_id", user!.id);
+        .upsert(normalizedUpdates, { onConflict: "user_id" })
+        .select()
+        .single();
       if (error) throw error;
+      return data as UserSettings;
     },
-    onSuccess: () => {
+    onMutate: async (updates) => {
+      await queryClient.cancelQueries({ queryKey: ["settings", user?.id] });
+      const previousSettings = queryClient.getQueryData<UserSettings>(["settings", user?.id]);
+
+      if (previousSettings) {
+        queryClient.setQueryData<UserSettings>(["settings", user?.id], {
+          ...previousSettings,
+          ...updates,
+        } as UserSettings);
+      }
+
+      return { previousSettings };
+    },
+    onSuccess: (settings) => {
+      queryClient.setQueryData(["settings", user?.id], settings);
       queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error, _updates, context) => {
+      if (context?.previousSettings) {
+        queryClient.setQueryData(["settings", user?.id], context.previousSettings);
+      }
+      toast.error(err.message);
+    },
   });
 
   return {

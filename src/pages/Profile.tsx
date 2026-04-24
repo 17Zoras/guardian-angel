@@ -47,7 +47,7 @@ const Profile = () => {
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [accountPassword, setAccountPassword] = useState("");
 
-  const [editForm, setEditForm] = useState({ full_name: "", email: "", phone: "" });
+  const [editForm, setEditForm] = useState({ full_name: "", email: "", phone: "", avatar_url: "" });
   const [medicalForm, setMedicalForm] = useState({ blood_type: "", allergies: "", medical_conditions: "" });
 
   const startEditProfile = () => {
@@ -56,6 +56,7 @@ const Profile = () => {
         full_name: profile.full_name ?? "",
         email: profile.email ?? "",
         phone: profile.phone ?? "",
+        avatar_url: profile.avatar_url ?? "",
       });
     }
     setIsEditing(true);
@@ -72,46 +73,75 @@ const Profile = () => {
     setIsMedicalEditing(true);
   };
 
-  const handleSave = () => {
-    if (editForm.email.trim() && editForm.email.trim() !== user?.email) {
-      updateAccount({ email: editForm.email.trim() }).then(({ error }) => {
-        if (error) {
-          toast.error(error.message);
-        } else {
-          toast.success("Account email update requested. Check your inbox if confirmation is required.");
-        }
-      });
+  const handleSave = async () => {
+    const nextEmail = editForm.email.trim();
+
+    if (nextEmail && nextEmail !== user?.email) {
+      const { error } = await updateAccount({ email: nextEmail });
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success("Account email update requested. Check your inbox if confirmation is required.");
     }
 
-    updateProfile.mutate({
-      full_name: editForm.full_name.trim(),
-      email: editForm.email.trim(),
-      phone: editForm.phone.trim(),
-    });
-    setIsEditing(false);
+    updateProfile.mutate(
+      {
+        full_name: editForm.full_name.trim(),
+        email: nextEmail,
+        phone: editForm.phone.trim(),
+        avatar_url: editForm.avatar_url.trim(),
+      },
+      {
+        onSuccess: () => {
+          setIsEditing(false);
+        },
+      }
+    );
   };
 
   const handleMedicalSave = () => {
-    updateProfile.mutate({
-      blood_type: medicalForm.blood_type,
-      allergies: medicalForm.allergies.trim(),
-      medical_conditions: medicalForm.medical_conditions.trim(),
-    });
-    setIsMedicalEditing(false);
+    updateProfile.mutate(
+      {
+        blood_type: medicalForm.blood_type,
+        allergies: medicalForm.allergies.trim(),
+        medical_conditions: medicalForm.medical_conditions.trim(),
+      },
+      {
+        onSuccess: () => {
+          setIsMedicalEditing(false);
+        },
+      }
+    );
   };
 
-  const handleDarkModeChange = (checked: boolean) => {
+  const handleDarkModeChange = async (checked: boolean) => {
     setTheme(checked ? "dark" : "light");
-    updateSettings.mutate({ theme: checked ? "dark" : "light" });
+    try {
+      await updateSettings.mutateAsync({ theme: checked ? "dark" : "light" });
+      toast.success(`Theme updated to ${checked ? "dark" : "light"} mode`);
+    } catch {
+      setTheme(checked ? "light" : "dark");
+    }
   };
 
-  const handleNotificationsChange = (checked: boolean) => {
-    updateSettings.mutate({ notifications_enabled: checked });
-    toast.success(checked ? "Notifications enabled" : "Notifications disabled");
+  const handleNotificationsChange = async (checked: boolean) => {
+    try {
+      await updateSettings.mutateAsync({ notifications_enabled: checked });
+      toast.success(checked ? "Notifications enabled" : "Notifications disabled");
+    } catch {
+      // Toast is handled in the hook.
+    }
   };
 
-  const handleLanguageChange = (language: string) => {
-    updateSettings.mutate({ language });
+  const handleLanguageChange = async (language: string) => {
+    try {
+      await updateSettings.mutateAsync({ language });
+    } catch {
+      return;
+    }
+
     const languageNames: Record<string, string> = {
       en: "English",
       es: "Spanish",
@@ -190,12 +220,7 @@ const Profile = () => {
             </div>
             <div className="space-y-2">
               <Label>New Password</Label>
-              <Input
-                type="password"
-                placeholder="Min 6 characters"
-                value={accountPassword}
-                onChange={(event) => setAccountPassword(event.target.value)}
-              />
+              <Input type="password" placeholder="Min 6 characters" value={accountPassword} onChange={(event) => setAccountPassword(event.target.value)} />
             </div>
             <Button variant="outline" onClick={handlePasswordUpdate} disabled={!accountPassword}>
               Update Password
@@ -274,6 +299,10 @@ const Profile = () => {
                 <Label>Phone</Label>
                 <Input value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
               </div>
+              <div className="space-y-2">
+                <Label>Avatar URL</Label>
+                <Input value={editForm.avatar_url} onChange={(event) => setEditForm({ ...editForm, avatar_url: event.target.value })} placeholder="https://..." />
+              </div>
               <Button onClick={handleSave} className="w-full" disabled={updateProfile.isPending}>
                 <Check className="mr-2 h-4 w-4" />
                 {updateProfile.isPending ? "Saving..." : "Save Changes"}
@@ -318,10 +347,7 @@ const Profile = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Medical Conditions</Label>
-                  <Input
-                    value={medicalForm.medical_conditions}
-                    onChange={(event) => setMedicalForm({ ...medicalForm, medical_conditions: event.target.value })}
-                  />
+                  <Input value={medicalForm.medical_conditions} onChange={(event) => setMedicalForm({ ...medicalForm, medical_conditions: event.target.value })} />
                 </div>
                 <Button onClick={handleMedicalSave} className="w-full" disabled={updateProfile.isPending}>
                   <Check className="mr-2 h-4 w-4" />
@@ -454,6 +480,25 @@ const Profile = () => {
               </div>
               <ChevronRight className="h-5 w-5 text-muted-foreground" />
             </button>
+          </CardContent>
+        </Card>
+
+        <Card className="gradient-card border-0 shadow-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold">Account Security</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Email Address</Label>
+              <Input value={profile?.email ?? user?.email ?? ""} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label>New Password</Label>
+              <Input type="password" placeholder="Min 6 characters" value={accountPassword} onChange={(event) => setAccountPassword(event.target.value)} />
+            </div>
+            <Button variant="outline" onClick={handlePasswordUpdate} disabled={!accountPassword}>
+              Update Password
+            </Button>
           </CardContent>
         </Card>
 
