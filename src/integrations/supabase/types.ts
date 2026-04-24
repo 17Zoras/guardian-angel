@@ -16,39 +16,128 @@ export type Database = {
     Tables: {
       alerts: {
         Row: {
+          countdown_seconds: number | null
           contacts_notified: number
           created_at: string
+          escalation_level: number
           id: string
           latitude: number | null
+          last_location_at: string | null
           location_text: string | null
           longitude: number | null
           resolved_at: string | null
           response_time_min: number | null
           status: string
+          updated_at: string
           user_id: string
         }
         Insert: {
+          countdown_seconds?: number | null
           contacts_notified?: number
           created_at?: string
+          escalation_level?: number
           id?: string
           latitude?: number | null
+          last_location_at?: string | null
           location_text?: string | null
           longitude?: number | null
           resolved_at?: string | null
           response_time_min?: number | null
           status?: string
+          updated_at?: string
           user_id: string
         }
         Update: {
+          countdown_seconds?: number | null
           contacts_notified?: number
           created_at?: string
+          escalation_level?: number
           id?: string
           latitude?: number | null
+          last_location_at?: string | null
           location_text?: string | null
           longitude?: number | null
           resolved_at?: string | null
           response_time_min?: number | null
           status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      alert_events: {
+        Row: {
+          alert_id: string
+          created_at: string
+          event_type: string
+          id: string
+          message: string
+          metadata: Json
+          user_id: string
+        }
+        Insert: {
+          alert_id: string
+          created_at?: string
+          event_type: string
+          id?: string
+          message?: string
+          metadata?: Json
+          user_id: string
+        }
+        Update: {
+          alert_id?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          message?: string
+          metadata?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_events_alert_id_fkey"
+            columns: ["alert_id"]
+            isOneToOne: false
+            referencedRelation: "alerts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evidence_items: {
+        Row: {
+          audio_data: string | null
+          created_at: string
+          id: string
+          item_type: string
+          mime_type: string | null
+          note: string | null
+          pinned: boolean
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          audio_data?: string | null
+          created_at?: string
+          id?: string
+          item_type: string
+          mime_type?: string | null
+          note?: string | null
+          pinned?: boolean
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          audio_data?: string | null
+          created_at?: string
+          id?: string
+          item_type?: string
+          mime_type?: string | null
+          note?: string | null
+          pinned?: boolean
+          title?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -228,6 +317,62 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      safety_checkins: {
+        Row: {
+          completed_at: string | null
+          created_alert_id: string | null
+          created_at: string
+          duration_minutes: number
+          expires_at: string
+          id: string
+          notes: string | null
+          started_at: string
+          status: string
+          title: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_alert_id?: string | null
+          created_at?: string
+          duration_minutes?: number
+          expires_at: string
+          id?: string
+          notes?: string | null
+          started_at?: string
+          status?: string
+          title?: string
+          type: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_alert_id?: string | null
+          created_at?: string
+          duration_minutes?: number
+          expires_at?: string
+          id?: string
+          notes?: string | null
+          started_at?: string
+          status?: string
+          title?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "safety_checkins_created_alert_id_fkey"
+            columns: ["created_alert_id"]
+            isOneToOne: false
+            referencedRelation: "alerts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

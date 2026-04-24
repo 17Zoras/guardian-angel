@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -56,6 +57,18 @@ export const useNotifications = () => {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
+  const markRead = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("notifications")
+        .update({ read: true })
+        .eq("id", id)
+        .eq("user_id", user!.id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+
   const clearAll = useMutation({
     mutationFn: async () => {
       const { error } = await supabase.from("notifications").delete().eq("user_id", user!.id);
@@ -80,11 +93,38 @@ export const useNotifications = () => {
 
   const unreadCount = (query.data ?? []).filter(n => !n.read).length;
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`notifications-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["notifications", user.id] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [queryClient, user]);
+
   return {
     notifications: query.data ?? [],
     isLoading: query.isLoading,
     error: query.error ? getSupabaseErrorMessage(query.error, "Unable to load notifications.") : null,
     unreadCount,
+    markRead,
     markAllRead,
     deleteNotification,
     clearAll,

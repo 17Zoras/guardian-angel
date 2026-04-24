@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Phone, Plus, User, Users, Heart, Trash2 } from "lucide-react";
+import { MessageCircle, Pencil, Phone, Plus, User, Users, Heart, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,18 +7,36 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import Layout from "@/components/Layout";
-import { useContacts } from "@/hooks/useContacts";
+import { useContacts, type Contact } from "@/hooks/useContacts";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
+const emptyForm = { name: "", phone: "", relationship: "Family" };
+
 const Contacts = () => {
-  const { contacts, isLoading, error, addContact, deleteContact, setPrimary } = useContacts();
+  const { contacts, isLoading, error, addContact, updateContact, deleteContact, setPrimary } = useContacts();
   const [isAddOpen, setIsAddOpen] = useState(false);
-  const [newContact, setNewContact] = useState({ name: "", phone: "", relationship: "Family" });
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [newContact, setNewContact] = useState(emptyForm);
+  const [editForm, setEditForm] = useState(emptyForm);
+
+  const validateContact = (contact: typeof emptyForm) => {
+    if (!contact.name.trim() || !contact.phone.trim()) {
+      toast.error("Name and phone number are required");
+      return false;
+    }
+
+    const phoneDigits = contact.phone.replace(/[^\d+]/g, "");
+    if (phoneDigits.length < 7) {
+      toast.error("Enter a valid phone number");
+      return false;
+    }
+
+    return true;
+  };
 
   const handleAddContact = () => {
-    if (!newContact.name.trim() || !newContact.phone.trim()) {
-      toast.error("Name and phone number are required");
+    if (!validateContact(newContact)) {
       return;
     }
 
@@ -31,8 +49,40 @@ const Contacts = () => {
       },
       {
         onSuccess: () => {
-          setNewContact({ name: "", phone: "", relationship: "Family" });
+          setNewContact(emptyForm);
           setIsAddOpen(false);
+        },
+      }
+    );
+  };
+
+  const handleEditOpen = (contact: Contact) => {
+    setEditingContact(contact);
+    setEditForm({
+      name: contact.name,
+      phone: contact.phone,
+      relationship: contact.relationship,
+    });
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingContact || !validateContact(editForm)) {
+      return;
+    }
+
+    updateContact.mutate(
+      {
+        id: editingContact.id,
+        updates: {
+          name: editForm.name.trim(),
+          phone: editForm.phone.trim(),
+          relationship: editForm.relationship,
+        },
+      },
+      {
+        onSuccess: () => {
+          setEditingContact(null);
+          setEditForm(emptyForm);
         },
       }
     );
@@ -40,6 +90,10 @@ const Contacts = () => {
 
   const handleCall = (phone: string) => {
     window.location.href = `tel:${phone}`;
+  };
+
+  const handleMessage = (phone: string) => {
+    window.location.href = `sms:${phone}`;
   };
 
   if (isLoading) {
@@ -90,21 +144,11 @@ const Contacts = () => {
               <div className="space-y-4 pt-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="Contact name"
-                    value={newContact.name}
-                    onChange={(event) => setNewContact({ ...newContact, name: event.target.value })}
-                  />
+                  <Input id="name" placeholder="Contact name" value={newContact.name} onChange={(event) => setNewContact({ ...newContact, name: event.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone Number</Label>
-                  <Input
-                    id="phone"
-                    placeholder="+1 (555) 123-4567"
-                    value={newContact.phone}
-                    onChange={(event) => setNewContact({ ...newContact, phone: event.target.value })}
-                  />
+                  <Input id="phone" placeholder="+1 (555) 123-4567" value={newContact.phone} onChange={(event) => setNewContact({ ...newContact, phone: event.target.value })} />
                 </div>
                 <div className="space-y-2">
                   <Label>Relationship</Label>
@@ -147,9 +191,14 @@ const Contacts = () => {
                     <p className="font-semibold text-foreground">{contact.name}</p>
                     <p className="text-sm text-muted-foreground">{contact.phone}</p>
                   </div>
-                  <Button variant="default" size="icon" className="bg-safe hover:bg-safe/90" onClick={() => handleCall(contact.phone)}>
-                    <Phone className="h-4 w-4" />
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="icon" onClick={() => handleMessage(contact.phone)}>
+                      <MessageCircle className="h-4 w-4" />
+                    </Button>
+                    <Button variant="default" size="icon" className="bg-safe hover:bg-safe/90" onClick={() => handleCall(contact.phone)}>
+                      <Phone className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </CardContent>
@@ -178,35 +227,24 @@ const Contacts = () => {
                       <p className="truncate font-medium text-foreground">{contact.name}</p>
                       {contact.is_primary && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">Primary</span>}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {contact.relationship} • {contact.phone}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{contact.relationship} • {contact.phone}</p>
                   </div>
                   <div className="flex items-center gap-1">
                     {!contact.is_primary && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-primary"
-                        onClick={() => setPrimary.mutate(contact.id)}
-                      >
+                      <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-primary" onClick={() => setPrimary.mutate(contact.id)}>
                         <Heart className="h-4 w-4" />
                       </Button>
                     )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-safe hover:bg-safe/10 hover:text-safe"
-                      onClick={() => handleCall(contact.phone)}
-                    >
+                    <Button variant="ghost" size="icon" onClick={() => handleEditOpen(contact)}>
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="text-primary hover:bg-primary/10 hover:text-primary" onClick={() => handleMessage(contact.phone)}>
+                      <MessageCircle className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="text-safe hover:bg-safe/10 hover:text-safe" onClick={() => handleCall(contact.phone)}>
                       <Phone className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      onClick={() => deleteContact.mutate(contact.id)}
-                    >
+                    <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => deleteContact.mutate(contact.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -219,11 +257,47 @@ const Contacts = () => {
         <Card className="gradient-card border-0 bg-accent/30 shadow-card">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">
-              <strong>Tip:</strong> Your primary contact should be the person most likely to answer quickly. We recommend adding at least 3 trusted contacts.
+              <strong>Tip:</strong> Keep one favorite contact as your fastest responder, and test that your call and SMS shortcuts work on your device.
             </p>
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={!!editingContact} onOpenChange={(open) => !open && setEditingContact(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Contact</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label>Name</Label>
+              <Input value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone Number</Label>
+              <Input value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
+            </div>
+            <div className="space-y-2">
+              <Label>Relationship</Label>
+              <Select value={editForm.relationship} onValueChange={(value) => setEditForm({ ...editForm, relationship: value })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Family", "Friend", "Partner", "Colleague", "Other"].map((relationship) => (
+                    <SelectItem key={relationship} value={relationship}>
+                      {relationship}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleSaveEdit} className="w-full" disabled={updateContact.isPending}>
+              {updateContact.isPending ? "Saving..." : "Save Contact"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };

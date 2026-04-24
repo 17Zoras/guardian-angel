@@ -43,6 +43,7 @@ export const useLiveLocation = (): UseLiveLocationReturn => {
       const { error: alertError } = await supabase
         .from("alerts")
         .update({
+          last_location_at: new Date().toISOString(),
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           location_text: `${position.coords.latitude.toFixed(5)}, ${position.coords.longitude.toFixed(5)}`,
@@ -52,6 +53,17 @@ export const useLiveLocation = (): UseLiveLocationReturn => {
       if (alertError) {
         console.error("Alert location update error:", alertError.message);
       }
+
+      await supabase.from("alert_events").insert({
+        alert_id: alertIdRef.current,
+        user_id: user.id,
+        event_type: "tracking_updated",
+        message: "Location updated during live tracking.",
+        metadata: {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        },
+      });
     },
     [user]
   );

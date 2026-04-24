@@ -48,6 +48,43 @@ export const useContacts = () => {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const updateContact = useMutation({
+    mutationFn: async ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: { name: string; phone: string; relationship: string };
+    }) => {
+      const { error } = await supabase
+        .from("emergency_contacts")
+        .update(updates)
+        .eq("id", id)
+        .eq("user_id", user!.id);
+      if (error) throw error;
+    },
+    onMutate: async ({ id, updates }) => {
+      await queryClient.cancelQueries({ queryKey: ["contacts", user?.id] });
+      const previousContacts = queryClient.getQueryData<Contact[]>(["contacts", user?.id]);
+
+      queryClient.setQueryData<Contact[]>(["contacts", user?.id], (current = []) =>
+        current.map((contact) => (contact.id === id ? { ...contact, ...updates } : contact))
+      );
+
+      return { previousContacts };
+    },
+    onError: (err: Error, _variables, context) => {
+      if (context?.previousContacts) {
+        queryClient.setQueryData(["contacts", user?.id], context.previousContacts);
+      }
+      toast.error(err.message);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      toast.success("Contact updated");
+    },
+  });
+
   const deleteContact = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("emergency_contacts").delete().eq("id", id);
@@ -79,6 +116,7 @@ export const useContacts = () => {
     isLoading: query.isLoading,
     error: query.error ? getSupabaseErrorMessage(query.error, "Unable to load contacts.") : null,
     addContact,
+    updateContact,
     deleteContact,
     setPrimary,
   };

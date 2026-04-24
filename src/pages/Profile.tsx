@@ -36,7 +36,7 @@ const Profile = () => {
   const { profile, isLoading: profileLoading, error: profileError, updateProfile } = useProfile();
   const { settings, isLoading: settingsLoading, error: settingsError, updateSettings } = useSettings();
   const { contacts, error: contactsError } = useContacts();
-  const { signOut } = useAuth();
+  const { signOut, updateAccount, user } = useAuth();
   const navigate = useNavigate();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -45,6 +45,7 @@ const Profile = () => {
   const [privacyDialogOpen, setPrivacyDialogOpen] = useState(false);
   const [languageDialogOpen, setLanguageDialogOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [accountPassword, setAccountPassword] = useState("");
 
   const [editForm, setEditForm] = useState({ full_name: "", email: "", phone: "" });
   const [medicalForm, setMedicalForm] = useState({ blood_type: "", allergies: "", medical_conditions: "" });
@@ -72,6 +73,16 @@ const Profile = () => {
   };
 
   const handleSave = () => {
+    if (editForm.email.trim() && editForm.email.trim() !== user?.email) {
+      updateAccount({ email: editForm.email.trim() }).then(({ error }) => {
+        if (error) {
+          toast.error(error.message);
+        } else {
+          toast.success("Account email update requested. Check your inbox if confirmation is required.");
+        }
+      });
+    }
+
     updateProfile.mutate({
       full_name: editForm.full_name.trim(),
       email: editForm.email.trim(),
@@ -118,6 +129,22 @@ const Profile = () => {
     navigate("/auth");
   };
 
+  const handlePasswordUpdate = async () => {
+    if (accountPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    const { error } = await updateAccount({ password: accountPassword });
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+
+    setAccountPassword("");
+    toast.success("Password updated");
+  };
+
   const languages = [
     { code: "en", name: "English (US)" },
     { code: "es", name: "Español" },
@@ -149,6 +176,30 @@ const Profile = () => {
             <ShieldCheck className="mx-auto mb-3 h-12 w-12 text-muted-foreground opacity-50" />
             <h2 className="text-lg font-semibold text-foreground">Profile setup is incomplete</h2>
             <p className="mt-2 text-sm text-muted-foreground">{profileError || settingsError}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="gradient-card border-0 shadow-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-lg font-semibold">Account Security</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Email Address</Label>
+              <Input value={profile?.email ?? user?.email ?? ""} disabled />
+            </div>
+            <div className="space-y-2">
+              <Label>New Password</Label>
+              <Input
+                type="password"
+                placeholder="Min 6 characters"
+                value={accountPassword}
+                onChange={(event) => setAccountPassword(event.target.value)}
+              />
+            </div>
+            <Button variant="outline" onClick={handlePasswordUpdate} disabled={!accountPassword}>
+              Update Password
+            </Button>
           </CardContent>
         </Card>
       </Layout>

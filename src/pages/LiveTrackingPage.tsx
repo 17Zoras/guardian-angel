@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNowStrict, format } from "date-fns";
-import { ArrowLeft, ExternalLink, MapPin, Clock, Loader2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, MapPin, Clock, Loader2, Activity } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAlertEvents } from "@/hooks/useAlertEvents";
 
 interface Location {
   id: string;
@@ -17,6 +18,7 @@ const LiveTrackingPage = () => {
   const { alertId } = useParams<{ alertId: string }>();
   const [location, setLocation] = useState<Location | null>(null);
   const [loading, setLoading] = useState(true);
+  const { alertEvents } = useAlertEvents(alertId);
 
   useEffect(() => {
     if (!alertId) {
@@ -125,11 +127,7 @@ const LiveTrackingPage = () => {
               </div>
 
               <Button asChild variant="outline" className="w-full sm:w-auto">
-                <a
-                  href={`https://www.google.com/maps?q=${location.latitude},${location.longitude}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a href={`https://www.google.com/maps?q=${location.latitude},${location.longitude}`} target="_blank" rel="noreferrer">
                   <ExternalLink className="mr-2 h-4 w-4" />
                   Open in Google Maps
                 </a>
@@ -147,6 +145,27 @@ const LiveTrackingPage = () => {
               referrerPolicy="no-referrer-when-downgrade"
               src={`https://www.google.com/maps?q=${location.latitude},${location.longitude}&output=embed`}
             />
+          </Card>
+
+          <Card className="gradient-card border-0 shadow-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Activity className="h-4 w-4 text-primary" />
+                Alert Activity
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {alertEvents.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No alert events yet.</p>
+              ) : (
+                alertEvents.slice(0, 8).map((event) => (
+                  <div key={event.id} className="rounded-xl bg-muted/50 p-3">
+                    <p className="font-medium text-foreground">{event.message}</p>
+                    <p className="text-xs text-muted-foreground">{format(new Date(event.created_at), "MMM d, yyyy h:mm:ss a")}</p>
+                  </div>
+                ))
+              )}
+            </CardContent>
           </Card>
         </>
       )}

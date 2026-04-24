@@ -32,7 +32,7 @@ interface NotificationsPanelProps {
 }
 
 const NotificationsPanel = ({ onClose }: NotificationsPanelProps) => {
-  const { notifications, unreadCount, error, markAllRead, deleteNotification, clearAll } = useNotifications();
+  const { notifications, unreadCount, error, markRead, markAllRead, deleteNotification, clearAll } = useNotifications();
 
   return (
     <div className="flex h-full flex-col">
@@ -75,6 +75,12 @@ const NotificationsPanel = ({ onClose }: NotificationsPanelProps) => {
               <div
                 key={notification.id}
                 className={`group relative rounded-xl p-4 transition-colors ${notification.read ? "bg-muted/30" : "bg-accent/50"}`}
+                onClick={() => {
+                  if (!notification.read) {
+                    markRead.mutate(notification.id);
+                  }
+                  onClose();
+                }}
               >
                 <div className="flex gap-3">
                   <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${getIconBg(notification.type)}`}>

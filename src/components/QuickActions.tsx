@@ -29,11 +29,16 @@ const QuickActions = () => {
       return;
     }
 
+    const recipients = contacts.map((contact) => contact.phone).join(",");
+    const message = encodeURIComponent("I may need help. Please check on me and watch for my live location.");
+
     addNotification.mutate({
       type: "alert",
       title: "Contacts alerted",
       message: `Prepared an emergency update for ${contacts.length} trusted contacts.`,
     });
+
+    window.location.href = `sms:${recipients}?body=${message}`;
 
     toast.success("Contacts are ready to be alerted", {
       description: `${contacts.length} trusted contact${contacts.length === 1 ? "" : "s"} available.`,
